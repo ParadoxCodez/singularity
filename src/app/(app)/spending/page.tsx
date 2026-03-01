@@ -119,10 +119,13 @@ export default function SpendingPage() {
     }, {} as Record<string, Transaction[]>);
 
     const handleAdd = async () => {
-        if (!amount || parseFloat(amount) <= 0 || !userId || !supabase) return;
+        if (!amount || parseFloat(amount) <= 0 || !supabase) return;
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
         setIsAdding(true);
         await supabase.from('transactions').insert({
-            user_id: userId,
+            user_id: user.id,
             amount: parseFloat(amount),
             type: 'expense',
             category: selectedCategory,
@@ -138,17 +141,33 @@ export default function SpendingPage() {
         setIsAdding(false);
     };
 
-    const handleDelete = async (e: React.MouseEvent, id: string) => {
-        e.stopPropagation();
+    async function deleteTransaction(txId: string) {
+        const supabase = createClient()
         if (!supabase) return;
-        if (confirmingDelete === id) {
-            await supabase.from('transactions').delete().eq('id', id);
-            setTransactions((prev: Transaction[]) => prev.filter((t: Transaction) => t.id !== id));
-            setConfirmingDelete(null);
-        } else {
-            setConfirmingDelete(id);
+
+        // Get fresh session
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session?.user?.id) {
+            console.error('No session found')
+            return
         }
-    };
+
+        // Optimistic update first
+        setTransactions(prev => prev.filter(t => t.id !== txId))
+        setConfirmingDelete(null)
+
+        // Then delete from DB
+        const { error } = await supabase
+            .from('transactions')
+            .delete()
+            .eq('id', txId)
+
+        if (error) {
+            console.error('Delete error:', error.message)
+            // Refetch to restore if failed
+            fetchTransactions()
+        }
+    }
 
     const handlePrevMonth = () => {
         setViewMonth(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
@@ -401,13 +420,15 @@ export default function SpendingPage() {
                                                             ₹{Number(tx.amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                         </span>
                                                         <button
-                                                            onClick={(e) => handleDelete(e, tx.id)}
-                                                            className={`opacity-0 group-hover:opacity-100 transition-opacity font-body rounded ${confirmingDelete === tx.id
-                                                                ? 'text-red-400 text-xs px-2 py-1 bg-red-500/10 border border-red-500/20 opacity-100'
-                                                                : 'text-[#6B6B8A] hover:text-red-400 text-xs px-2 py-1'
-                                                                }`}
+                                                            onClick={async (e) => {
+                                                                e.stopPropagation()
+                                                                if (window.confirm('Delete this transaction?')) {
+                                                                    await deleteTransaction(tx.id)
+                                                                }
+                                                            }}
+                                                            className="opacity-0 group-hover:opacity-100 transition-opacity text-[#6B6B8A] hover:text-red-400 text-xs px-2 py-1 rounded"
                                                         >
-                                                            {confirmingDelete === tx.id ? 'Delete?' : '✕'}
+                                                            ✕
                                                         </button>
                                                     </div>
                                                 </div>

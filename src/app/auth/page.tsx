@@ -40,7 +40,17 @@ export default function AuthPage() {
         }
 
         if (mode === "signup") {
-            const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { full_name: fullName } } })
+            const { data, error } = await supabase.auth.signUp({ email, password })
+
+            if (!error && data.user) {
+                // Save name to profiles table
+                await supabase.from('profiles').upsert({
+                    id: data.user.id,
+                    full_name: fullName.trim() || email.split('@')[0],
+                    updated_at: new Date().toISOString(),
+                })
+            }
+
             if (error) {
                 setMessage({ type: "error", text: error.message });
                 setLoading(false);
@@ -147,36 +157,21 @@ export default function AuthPage() {
                     {/* Form */}
                     <form onSubmit={handleSubmit} className="mt-8 space-y-5">
                         {/* Full Name — sign up only */}
-                        <AnimatePresence>
-                            {isSignUp && (
-                                <motion.div
-                                    initial={{ opacity: 0, height: 0 }}
-                                    animate={{ opacity: 1, height: "auto" }}
-                                    exit={{ opacity: 0, height: 0 }}
-                                    transition={{ duration: 0.3, ease }}
-                                    className="overflow-hidden"
-                                >
-                                    <label
-                                        htmlFor="fullName"
-                                        className="block font-body text-xs text-[#6B6B8A] uppercase tracking-wider mb-2"
-                                    >
-                                        Full Name
-                                    </label>
-                                    <input
-                                        id="fullName"
-                                        type="text"
-                                        value={fullName}
-                                        onChange={(e) => setFullName(e.target.value)}
-                                        placeholder="Your name"
-                                        required={isSignUp}
-                                        className="w-full px-4 py-3 rounded-lg bg-[#111118] border border-white/[0.06]
-                               text-white font-body text-sm placeholder:text-[#3D3D54]
-                               focus:outline-none focus:border-[#7C3AED]/50 focus:ring-1 focus:ring-[#7C3AED]/30
-                               transition-all duration-200"
-                                    />
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
+                        {mode === 'signup' && (
+                            <div className="mb-4">
+                                <label className="text-[#6B6B8A] text-xs uppercase tracking-widest mb-1.5 block" style={{ fontFamily: 'Satoshi' }}>
+                                    YOUR NAME
+                                </label>
+                                <input
+                                    type="text"
+                                    value={fullName}
+                                    onChange={e => setFullName(e.target.value)}
+                                    placeholder="What should we call you?"
+                                    className="w-full bg-[#0A0A0F] border border-white/10 rounded-lg px-4 py-3 text-white text-sm focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/20 transition-all"
+                                    style={{ fontFamily: 'Satoshi' }}
+                                />
+                            </div>
+                        )}
 
                         {/* Email */}
                         <div>
@@ -202,12 +197,22 @@ export default function AuthPage() {
 
                         {/* Password */}
                         <div>
-                            <label
-                                htmlFor="password"
-                                className="block font-body text-xs text-[#6B6B8A] uppercase tracking-wider mb-2"
-                            >
-                                Password
-                            </label>
+                            <div className="flex items-center justify-between mb-1.5">
+                                <label
+                                    htmlFor="password"
+                                    className="font-body text-xs text-[#6B6B8A] uppercase tracking-wider"
+                                >
+                                    Password
+                                </label>
+                                {mode === "signin" && (
+                                    <Link
+                                        href="/auth/forgot-password"
+                                        className="text-xs text-purple-400 hover:text-purple-300 transition-colors font-body"
+                                    >
+                                        Forgot password?
+                                    </Link>
+                                )}
+                            </div>
                             <input
                                 id="password"
                                 type="password"

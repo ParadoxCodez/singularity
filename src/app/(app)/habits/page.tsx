@@ -292,12 +292,31 @@ export default function HabitsPage() {
 
     /* ─── Delete habit ─── */
     async function deleteHabit(habitId: string) {
+        const supabase = createClient()
         if (!supabase) return;
+        const { data: { user: currentUser } } = await supabase.auth.getUser()
+        if (!currentUser?.id) return
+
+        // Delete logs first
         await supabase
+            .from('habit_logs')
+            .delete()
+            .eq('habit_id', habitId)
+            .eq('user_id', currentUser.id)
+
+        // Then delete habit
+        const { error } = await supabase
             .from('habits')
             .delete()
-            .eq('id', habitId);
-        setHabits(prev => prev.filter(h => h.id !== habitId));
+            .eq('id', habitId)
+            .eq('user_id', currentUser.id)
+
+        if (!error) {
+            setHabits(prev => prev.filter(h => h.id !== habitId))
+            setLogs(prev => prev.filter(l => l.habit_id !== habitId))
+        } else {
+            console.error('Delete habit error:', error.message)
+        }
     }
 
     /* ─── Month navigation ─── */

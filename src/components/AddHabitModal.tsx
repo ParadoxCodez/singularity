@@ -43,8 +43,15 @@ export default function AddHabitModal({
             return;
         }
 
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+            setError("User not authenticated.");
+            setSaving(false);
+            return;
+        }
+
         const { error: insertError } = await supabase.from("habits").insert({
-            user_id: userId,
+            user_id: user.id,
             name: habitName.trim(),
             icon: selectedEmoji,
         });
@@ -138,8 +145,8 @@ export default function AddHabitModal({
                                             type="button"
                                             onClick={() => setSelectedEmoji(emoji)}
                                             className={`w-9 h-9 rounded-lg flex items-center justify-center text-lg cursor-pointer transition-colors duration-200 border ${selectedEmoji === emoji
-                                                    ? "border-purple-500 bg-purple-500/20"
-                                                    : "border-transparent bg-white/5 hover:bg-white/10"
+                                                ? "border-purple-500 bg-purple-500/20"
+                                                : "border-transparent bg-white/5 hover:bg-white/10"
                                                 }`}
                                         >
                                             {emoji}
