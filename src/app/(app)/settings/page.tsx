@@ -37,7 +37,6 @@ export default function SettingsPage() {
     const [profileMessage, setProfileMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
     // Password form state
-    const [currentPassword, setCurrentPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [isSavingPassword, setIsSavingPassword] = useState(false);
@@ -315,7 +314,7 @@ export default function SettingsPage() {
                                             className="w-full bg-[#0A0A0F] border border-white/10 rounded-lg px-4 py-3 text-white text-sm focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/20 transition-all font-body"
                                         />
                                         {(newPassword || confirmPassword) && newPassword !== confirmPassword && (
-                                            <p className="text-red-400 text-xs mt-1 font-body">Passwords don't match</p>
+                                            <p className="text-red-400 text-xs mt-1 font-body">Passwords don&apos;t match</p>
                                         )}
                                         {newPassword && newPassword.length < 8 && (
                                             <p className="text-red-400 text-xs mt-1 font-body">Password must be at least 8 characters</p>

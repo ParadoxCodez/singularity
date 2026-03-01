@@ -1,5 +1,4 @@
 import { redirect } from "next/navigation";
-import { useRouter } from 'next/navigation';
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import AppNavbar from "@/components/AppNavbar";

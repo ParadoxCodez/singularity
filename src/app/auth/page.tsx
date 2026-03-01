@@ -401,7 +401,7 @@ export default function AuthPage() {
                         className="text-purple-500 mb-4 leading-none"
                         style={{ fontFamily: 'Clash Display', fontSize: '80px', lineHeight: 1, opacity: 0.4 }}
                     >
-                        "
+                        &quot;
                     </div>
                     <h2
                         className="text-white leading-tight mb-8"
@@ -412,7 +412,7 @@ export default function AuthPage() {
                             maxWidth: '420px',
                         }}
                     >
-                        The person you'll be in 5 years is built by the habits you start today.
+                        The person you&apos;ll be in 5 years is built by the habits you start today.
                     </h2>
                     <div className="w-12 h-0.5 bg-purple-500 mb-6" />
                     <p
