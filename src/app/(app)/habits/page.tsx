@@ -218,65 +218,53 @@ export default function HabitsPage() {
 
     /* ─── Toggle habit ─── */
     async function toggleHabit(habitId: string, date: string) {
-        if (!supabase) return;
-        const completed = isCompleted(habitId, date);
+        const supabase = createClient()
 
-        // Update state immediately — optimistic update
-        if (completed) {
-            setLogs((prev) =>
-                prev.filter(
-                    (l) => !(l.habit_id === habitId && l.completed_date === date)
-                )
-            );
-        } else {
-            setLogs((prev) => [
-                ...prev,
-                {
-                    id: `temp-${Date.now()}`,
-                    habit_id: habitId,
-                    user_id: profile?.id || '',
-                    completed_date: date,
-                    completed: true,
-                },
-            ]);
+        // Verify session exists before any write
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session) {
+            console.error('No session — cannot save')
+            return
         }
 
-        // Then sync with Supabase in background
-        try {
-            if (completed) {
-                await supabase
-                    .from("habit_logs")
-                    .delete()
-                    .eq("habit_id", habitId)
-                    .eq("completed_date", date);
-            } else {
-                await supabase.from("habit_logs").insert({
+        const userId = session.user.id
+        const completed = isCompleted(habitId, date)
+
+        // Optimistic update
+        if (completed) {
+            setLogs(prev => prev.filter(l =>
+                !(l.habit_id === habitId && l.completed_date === date)
+            ))
+        } else {
+            setLogs(prev => [...prev, {
+                id: `temp-${Date.now()}`,
+                habit_id: habitId,
+                user_id: userId,
+                completed_date: date,
+                completed: true,
+                created_at: new Date().toISOString(),
+            }])
+        }
+
+        // Write to Supabase
+        if (completed) {
+            const { error } = await supabase
+                .from('habit_logs')
+                .delete()
+                .eq('habit_id', habitId)
+                .eq('completed_date', date)
+                .eq('user_id', userId)
+            if (error) console.error('Toggle error:', error.message)
+        } else {
+            const { error } = await supabase
+                .from('habit_logs')
+                .upsert({
                     habit_id: habitId,
-                    user_id: profile?.id || '',
+                    user_id: userId,
                     completed_date: date,
                     completed: true,
-                });
-            }
-        } catch (error) {
-            // If Supabase fails, revert the optimistic update
-            if (completed) {
-                setLogs((prev) => [
-                    ...prev,
-                    {
-                        id: `reverted-${Date.now()}`,
-                        habit_id: habitId,
-                        user_id: profile?.id || '',
-                        completed_date: date,
-                        completed: true,
-                    },
-                ]);
-            } else {
-                setLogs((prev) =>
-                    prev.filter(
-                        (l) => !(l.habit_id === habitId && l.completed_date === date)
-                    )
-                );
-            }
+                }, { onConflict: 'habit_id,completed_date,user_id' })
+            if (error) console.error('Toggle error:', error.message)
         }
     }
 

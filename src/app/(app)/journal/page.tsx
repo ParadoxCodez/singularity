@@ -209,30 +209,36 @@ export default function JournalPage() {
         clearTimeout(saveTimeoutRef.current);
         saveTimeoutRef.current = setTimeout(async () => {
             setSaveStatus("saving");
+
+            const supabaseClient = createClient()
+            const { data: { session } } = await supabaseClient.auth.getSession()
+            if (!session) { console.error('No session'); return }
+
+            const currentUserId = session.user.id
             const contentString = JSON.stringify(content);
-            const existing = entries.find((e) => e.entry_date === selectedDate);
-            if (existing) {
-                await supabase!
-                    .from("journal_entries")
-                    .update({ content: contentString, mood, updated_at: new Date().toISOString() })
-                    .eq("id", existing.id);
+
+            const { error } = await supabaseClient
+                .from('journal_entries')
+                .upsert({
+                    user_id: currentUserId,
+                    entry_date: selectedDate,
+                    content: contentString,
+                    mood: mood,
+                    updated_at: new Date().toISOString(),
+                }, { onConflict: 'user_id,entry_date' })
+
+            if (error) {
+                console.error('Journal save error:', error.message)
             } else {
-                if (contentString === JSON.stringify(EMPTY_CONTENT) && !mood) {
-                    setSaveStatus("saved");
-                    return;
-                }
-                await supabase!
+                setSaveStatus('saved')
+                const { data } = await supabaseClient
                     .from("journal_entries")
-                    .insert({ user_id: userId, entry_date: selectedDate, content: contentString, mood });
+                    .select("*")
+                    .order("entry_date", { ascending: false });
+                const all = data || [];
+                setEntries(all);
+                calcStreak(all);
             }
-            const { data } = await supabase!
-                .from("journal_entries")
-                .select("*")
-                .order("entry_date", { ascending: false });
-            const all = data || [];
-            setEntries(all);
-            calcStreak(all);
-            setSaveStatus("saved");
         }, 1500);
 
         return () => clearTimeout(saveTimeoutRef.current);

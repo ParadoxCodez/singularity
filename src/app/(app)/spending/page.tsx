@@ -118,28 +118,31 @@ export default function SpendingPage() {
         return groups;
     }, {} as Record<string, Transaction[]>);
 
-    const handleAdd = async () => {
-        if (!amount || parseFloat(amount) <= 0 || !supabase) return;
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
+    async function addTransaction() {
+        if (!amount || parseFloat(amount) <= 0) return
+        const supabase = createClient()
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session) { console.error('No session'); return }
 
-        setIsAdding(true);
-        await supabase.from('transactions').insert({
-            user_id: user.id,
+        setIsAdding(true)
+        const { error } = await supabase.from('transactions').insert({
+            user_id: session.user.id,
             amount: parseFloat(amount),
             type: 'expense',
             category: selectedCategory,
             note: note || null,
-            transaction_date: txDate,
-        });
-        setAmount('');
-        setNote('');
-        setTxDay(String(new Date().getDate()).padStart(2, '0'));
-        setTxMonth(String(new Date().getMonth() + 1).padStart(2, '0'));
-        setTxYear(String(new Date().getFullYear()));
-        await fetchTransactions();
-        setIsAdding(false);
-    };
+            transaction_date: `${txYear}-${txMonth}-${txDay}`,
+        })
+
+        if (error) {
+            console.error('Add transaction error:', error.message)
+        } else {
+            setAmount('')
+            setNote('')
+            await fetchTransactions()
+        }
+        setIsAdding(false)
+    }
 
     async function deleteTransaction(txId: string) {
         const supabase = createClient()
@@ -362,7 +365,7 @@ export default function SpendingPage() {
                                 </div>
 
                                 <button
-                                    onClick={handleAdd}
+                                    onClick={addTransaction}
                                     disabled={isAdding || !amount || parseFloat(amount) <= 0}
                                     className="w-full mt-4 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2 text-sm font-body"
                                 >
