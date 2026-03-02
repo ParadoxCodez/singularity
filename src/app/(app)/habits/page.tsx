@@ -60,10 +60,12 @@ function HabitOptionsMenu({
     habitId,
     onArchive,
     onDelete,
+    onRename,
 }: {
     habitId: string;
     onArchive: (id: string) => void;
     onDelete: (id: string) => void;
+    onRename: (id: string) => void;
 }) {
     const [open, setOpen] = useState(false);
     const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -95,6 +97,19 @@ function HabitOptionsMenu({
             </button>
             {open && (
                 <div className="absolute right-0 top-8 z-20 bg-[#1A1A24] border border-white/[0.08] rounded-lg py-1 min-w-[140px] shadow-xl">
+                    {/* Rename option */}
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onRename(habitId);
+                            setOpen(false);
+                        }}
+                        className="w-full text-left px-4 py-2.5 text-sm text-white hover:bg-white/5 transition-colors"
+                        style={{ fontFamily: 'Satoshi' }}
+                    >
+                        ✏️ Rename habit
+                    </button>
+                    <div className="h-px bg-white/5 mx-2" />
                     <button
                         onClick={(e) => {
                             e.stopPropagation();
@@ -143,6 +158,24 @@ export default function HabitsPage() {
     const [logs, setLogs] = useState<HabitLog[]>([]);
     const [loading, setLoading] = useState(true);
     const [modalOpen, setModalOpen] = useState(false);
+    const [renamingHabitId, setRenamingHabitId] = useState<string | null>(null)
+    const [renameValue, setRenameValue] = useState('')
+
+    async function renameHabit(habitId: string) {
+        if (!renameValue.trim()) return
+        const { error } = await supabase
+            .from('habits')
+            .update({ name: renameValue.trim() })
+            .eq('id', habitId)
+
+        if (!error) {
+            setHabits(prev => prev.map(h =>
+                h.id === habitId ? { ...h, name: renameValue.trim() } : h
+            ))
+            setRenamingHabitId(null)
+            setRenameValue('')
+        }
+    }
 
     useEffect(() => {
         if (supabase) {
@@ -445,12 +478,37 @@ export default function HabitsPage() {
                                                 <span className="text-xl">{habit.icon || "🎯"}</span>
 
                                                 {/* Name */}
-                                                <span
-                                                    className={`font-body font-medium text-[15px] ${done ? "text-white/50 line-through" : "text-white"
-                                                        }`}
-                                                >
-                                                    {habit.name}
-                                                </span>
+                                                {renamingHabitId === habit.id ? (
+                                                    <div className="flex items-center gap-2 flex-1" onClick={e => e.stopPropagation()}>
+                                                        <input
+                                                            autoFocus
+                                                            value={renameValue}
+                                                            onChange={e => setRenameValue(e.target.value)}
+                                                            onKeyDown={e => {
+                                                                if (e.key === 'Enter') renameHabit(habit.id)
+                                                                if (e.key === 'Escape') { setRenamingHabitId(null); setRenameValue('') }
+                                                            }}
+                                                            className="bg-white/10 border border-purple-500/40 rounded-md px-3 py-1 text-white text-sm focus:outline-none focus:border-purple-500 flex-1"
+                                                            style={{ fontFamily: 'Satoshi' }}
+                                                        />
+                                                        <button
+                                                            onClick={() => renameHabit(habit.id)}
+                                                            className="text-xs bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 px-2 py-1 rounded transition-colors flex-shrink-0"
+                                                        >
+                                                            Save
+                                                        </button>
+                                                        <button
+                                                            onClick={() => { setRenamingHabitId(null); setRenameValue('') }}
+                                                            className="text-xs text-[#6B6B8A] hover:text-white px-2 py-1 rounded hover:bg-white/5 transition-colors flex-shrink-0"
+                                                        >
+                                                            Cancel
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-white text-sm font-medium" style={{ fontFamily: 'Satoshi' }}>
+                                                        {habit.name}
+                                                    </span>
+                                                )}
 
                                                 {/* Streak badge */}
                                                 <span className="ml-auto flex items-center gap-1 text-sm font-body font-medium">
@@ -468,6 +526,11 @@ export default function HabitsPage() {
                                                     habitId={habit.id}
                                                     onArchive={archiveHabit}
                                                     onDelete={deleteHabit}
+                                                    onRename={(id) => {
+                                                        const h = habits.find(h => h.id === id)
+                                                        setRenameValue(h?.name || '')
+                                                        setRenamingHabitId(id)
+                                                    }}
                                                 />
                                             </motion.div>
                                         );
@@ -564,6 +627,11 @@ export default function HabitsPage() {
                                                                         habitId={habit.id}
                                                                         onArchive={archiveHabit}
                                                                         onDelete={deleteHabit}
+                                                                        onRename={(id) => {
+                                                                            const h = habits.find(h => h.id === id)
+                                                                            setRenameValue(h?.name || '')
+                                                                            setRenamingHabitId(id)
+                                                                        }}
                                                                     />
                                                                 </div>
                                                             </td>

@@ -47,7 +47,7 @@ export default function SpendingPage() {
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [loading, setLoading] = useState(true);
     const [viewMonth, setViewMonth] = useState(new Date());
-    const [confirmingDelete, setConfirmingDelete] = useState<string | null>(null);
+    const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
 
     const [amount, setAmount] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('Food');
@@ -91,12 +91,6 @@ export default function SpendingPage() {
     useEffect(() => {
         fetchTransactions();
     }, [fetchTransactions]);
-
-    useEffect(() => {
-        const handleClickOutside = () => setConfirmingDelete(null);
-        document.addEventListener('click', handleClickOutside);
-        return () => document.removeEventListener('click', handleClickOutside);
-    }, []);
 
     const totalSpent = transactions
         .filter((t: Transaction) => t.type === 'expense')
@@ -146,30 +140,16 @@ export default function SpendingPage() {
 
     async function deleteTransaction(txId: string) {
         const supabase = createClient()
-        if (!supabase) return;
-
-        // Get fresh session
         const { data: { session } } = await supabase.auth.getSession()
-        if (!session?.user?.id) {
-            console.error('No session found')
-            return
-        }
-
-        // Optimistic update first
+        if (!session) return
         setTransactions(prev => prev.filter(t => t.id !== txId))
-        setConfirmingDelete(null)
-
-        // Then delete from DB
+        setPendingDeleteId(null)
         const { error } = await supabase
             .from('transactions')
             .delete()
             .eq('id', txId)
-
-        if (error) {
-            console.error('Delete error:', error.message)
-            // Refetch to restore if failed
-            fetchTransactions()
-        }
+            .eq('user_id', session.user.id)
+        if (error) { console.error('Delete error:', error.message); fetchTransactions() }
     }
 
     const handlePrevMonth = () => {
@@ -422,17 +402,35 @@ export default function SpendingPage() {
                                                         <span className="text-white font-medium text-sm font-body">
                                                             ₹{Number(tx.amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                         </span>
-                                                        <button
-                                                            onClick={async (e) => {
-                                                                e.stopPropagation()
-                                                                if (window.confirm('Delete this transaction?')) {
-                                                                    await deleteTransaction(tx.id)
-                                                                }
-                                                            }}
-                                                            className="opacity-0 group-hover:opacity-100 transition-opacity text-[#6B6B8A] hover:text-red-400 text-xs px-2 py-1 rounded"
-                                                        >
-                                                            ✕
-                                                        </button>
+                                                        <div className="flex items-center gap-1 flex-shrink-0 ml-3" onClick={e => e.stopPropagation()}>
+                                                            {pendingDeleteId === tx.id ? (
+                                                                <>
+                                                                    <button
+                                                                        onClick={() => deleteTransaction(tx.id)}
+                                                                        className="text-xs text-red-400 hover:text-red-300 bg-red-400/10 hover:bg-red-400/20 px-2 py-1 rounded-md transition-colors"
+                                                                        style={{ fontFamily: 'Satoshi' }}
+                                                                    >
+                                                                        Confirm
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => setPendingDeleteId(null)}
+                                                                        className="text-xs text-[#6B6B8A] hover:text-white bg-white/5 hover:bg-white/10 px-2 py-1 rounded-md transition-colors"
+                                                                        style={{ fontFamily: 'Satoshi' }}
+                                                                    >
+                                                                        Cancel
+                                                                    </button>
+                                                                </>
+                                                            ) : (
+                                                                <button
+                                                                    onClick={() => setPendingDeleteId(tx.id)}
+                                                                    className="text-[#6B6B8A] hover:text-red-400 transition-colors w-6 h-6 flex items-center justify-center rounded hover:bg-red-400/10"
+                                                                >
+                                                                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                                                                        <path d="M1 1L11 11M11 1L1 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                                                                    </svg>
+                                                                </button>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 </div>
                                             );
