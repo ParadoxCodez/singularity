@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { motion } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
 import AddHabitModal from "@/components/AddHabitModal";
@@ -136,6 +136,7 @@ function HabitOptionsMenu({
 
 /* ─── Page ─── */
 export default function HabitsPage() {
+    const supabase = useMemo(() => createClient(), [])
     const { profile } = useProfile();
     const [user, setUser] = useState<any>(null);
     const [habits, setHabits] = useState<Habit[]>([]);
@@ -144,11 +145,10 @@ export default function HabitsPage() {
     const [modalOpen, setModalOpen] = useState(false);
 
     useEffect(() => {
-        const supabase = createClient()
         if (supabase) {
             supabase.auth.getUser().then(({ data: { user } }) => setUser(user))
         }
-    }, [])
+    }, [supabase])
 
     // Month navigation state
     const now = new Date();
@@ -158,42 +158,52 @@ export default function HabitsPage() {
     const todayStr = toDateStr(now);
     const daysInMonth = getDaysInMonth(viewYear, viewMonth);
 
-    const supabase = createClient();
-
     /* ─── Fetch habits + logs ─── */
     const fetchData = useCallback(async () => {
-        if (!supabase) return;
-        setLoading(true);
+        setLoading(true)
 
-        const { data: habitsData } = await supabase
-            .from("habits")
-            .select("*")
-            .eq("is_archived", false)
-            .order("created_at", { ascending: true });
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session?.user) { setLoading(false); return }
 
-        const startOfMonth = `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-01`;
-        const endOfMonth = `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(daysInMonth).padStart(2, "0")}`;
+        const userId = session.user.id
 
-        const { data: logsData } = await supabase
-            .from("habit_logs")
-            .select("*")
-            .gte("completed_date", startOfMonth)
-            .lte("completed_date", endOfMonth);
+        // Use existing viewYear and viewMonth number variables
+        const monthStr = String(viewMonth + 1).padStart(2, '0')
+        const startDate = `${viewYear}-${monthStr}-01`
+        const lastDay = new Date(viewYear, viewMonth + 1, 0).getDate()
+        const endDate = `${viewYear}-${monthStr}-${String(lastDay).padStart(2, '0')}`
 
-        setHabits(habitsData || []);
-        setLogs(logsData || []);
-        setLoading(false);
-    }, [supabase, viewYear, viewMonth, daysInMonth]);
+        const [{ data: habitsData }, { data: logsData }] = await Promise.all([
+            supabase
+                .from('habits')
+                .select('*')
+                .eq('user_id', userId)
+                .eq('is_archived', false)
+                .order('created_at', { ascending: true }),
+            supabase
+                .from('habit_logs')
+                .select('*')
+                .eq('user_id', userId)
+                .gte('completed_date', startDate)
+                .lte('completed_date', endDate)
+        ])
+
+        setHabits(habitsData || [])
+        setLogs(logsData || [])
+        setLoading(false)
+    }, [viewYear, viewMonth, supabase])
 
     useEffect(() => {
-        fetchData();
-    }, [fetchData]);
+        fetchData()
+    }, [fetchData])
 
     /* ─── Helper functions ─── */
-    function isCompleted(habitId: string, date: string) {
-        return logs.some(
-            (l) => l.habit_id === habitId && l.completed_date === date
-        );
+    function isCompleted(habitId: string, date: string): boolean {
+        return logs.some(l =>
+            l.habit_id === habitId &&
+            l.completed_date === date &&
+            l.completed === true
+        )
     }
 
     function getStreak(habitId: string) {
@@ -218,19 +228,13 @@ export default function HabitsPage() {
 
     /* ─── Toggle habit ─── */
     async function toggleHabit(habitId: string, date: string) {
-        const supabase = createClient()
-
-        // Verify session exists before any write
         const { data: { session } } = await supabase.auth.getSession()
-        if (!session) {
-            console.error('No session — cannot save')
-            return
-        }
+        if (!session?.user) return
 
         const userId = session.user.id
         const completed = isCompleted(habitId, date)
 
-        // Optimistic update
+        // Optimistic update first
         if (completed) {
             setLogs(prev => prev.filter(l =>
                 !(l.habit_id === habitId && l.completed_date === date)
@@ -246,7 +250,6 @@ export default function HabitsPage() {
             }])
         }
 
-        // Write to Supabase
         if (completed) {
             const { error } = await supabase
                 .from('habit_logs')
@@ -254,7 +257,7 @@ export default function HabitsPage() {
                 .eq('habit_id', habitId)
                 .eq('completed_date', date)
                 .eq('user_id', userId)
-            if (error) console.error('Toggle error:', error.message)
+            if (error) { console.error('Delete error:', error.message); fetchData() }
         } else {
             const { error } = await supabase
                 .from('habit_logs')
@@ -263,8 +266,12 @@ export default function HabitsPage() {
                     user_id: userId,
                     completed_date: date,
                     completed: true,
-                }, { onConflict: 'habit_id,completed_date,user_id' })
-            if (error) console.error('Toggle error:', error.message)
+                    created_at: new Date().toISOString(),
+                }, {
+                    onConflict: 'habit_id,completed_date,user_id',
+                    ignoreDuplicates: false,
+                })
+            if (error) { console.error('Upsert error:', error.message); fetchData() }
         }
     }
 
@@ -280,7 +287,6 @@ export default function HabitsPage() {
 
     /* ─── Delete habit ─── */
     async function deleteHabit(habitId: string) {
-        const supabase = createClient()
         if (!supabase) return;
         const { data: { user: currentUser } } = await supabase.auth.getUser()
         if (!currentUser?.id) return
