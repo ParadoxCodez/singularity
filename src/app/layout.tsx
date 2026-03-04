@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import NavigationProgress from "@/components/NavigationProgress";
+import { Analytics } from '@vercel/analytics/next';
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://singularity.vercel.app'
 
@@ -125,6 +126,7 @@ export default function RootLayout({
       <body className="font-body bg-background text-text-primary">
         <NavigationProgress />
         {children}
+        <Analytics />
       </body>
     </html>
   );
